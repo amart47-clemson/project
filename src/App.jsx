@@ -8,6 +8,7 @@ import {
 } from './lib/analysis'
 import { fetchSatelliteMetrics } from './lib/satellite'
 import { detectTrees, detectionsToTrees } from './lib/treeCrownDetection'
+import { fetchGediForBbox } from './lib/gedi'
 import './App.css'
 
 const DEFAULT_CENTER = [39.8283, -98.5795]
@@ -20,6 +21,7 @@ export default function App() {
   const [areaHa, setAreaHa] = useState(null)
   const [satelliteMetrics, setSatelliteMetrics] = useState(null)
   const [treeCrownDetection, setTreeCrownDetection] = useState(null)
+  const [gediData, setGediData] = useState(null)
   const [analysisLoading, setAnalysisLoading] = useState(false)
 
   const handleAnalyze = useCallback(async (params) => {
@@ -32,12 +34,18 @@ export default function App() {
     setAnalysisLoading(true)
     setSatelliteMetrics(null)
     setTreeCrownDetection(null)
+    setGediData(null)
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
       let trees
       let detectionResult = null
       if (requestBbox && requestBbox.length === 4) {
-        detectionResult = await detectTrees(requestBbox, apiBase)
+        const [detectionResult_, gediResult] = await Promise.all([
+          detectTrees(requestBbox, apiBase),
+          fetchGediForBbox(requestBbox, apiBase),
+        ])
+        detectionResult = detectionResult_
+        if (gediResult) setGediData(gediResult)
         if (detectionResult?.count > 0 && detectionResult.trees?.length) {
           trees = detectionsToTrees(detectionResult.trees)
           setTreeCrownDetection({
@@ -49,10 +57,7 @@ export default function App() {
       if (!trees?.length) {
         trees = syntheticInventoryForArea(ha, lat, lng)
       }
-      const [satelliteResult, _] = await Promise.all([
-        fetchSatelliteMetrics([lat, lng], radiusForSatellite),
-        Promise.resolve(),
-      ])
+      const satelliteResult = await fetchSatelliteMetrics([lat, lng], radiusForSatellite)
       setSatelliteMetrics(satelliteResult)
       const result = runAnalysis(trees)
       setAnalysisResult(result)
@@ -82,6 +87,7 @@ export default function App() {
           areaHa={areaHa}
           satelliteMetrics={satelliteMetrics}
           treeCrownDetection={treeCrownDetection}
+          gediData={gediData}
           analysisLoading={analysisLoading}
         />
       </div>

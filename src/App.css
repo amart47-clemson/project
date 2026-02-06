@@ -269,6 +269,25 @@
 .tree-crown-section h3 {
   margin-top: 0;
 }
+.gedi-section {
+  margin-bottom: 0.5rem;
+}
+.gedi-section h3 {
+  margin-top: 0;
+}
+.gedi-desc {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+}
+.gedi-error {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.gedi-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
 .satellite-section {
   margin-bottom: 0.5rem;
 }

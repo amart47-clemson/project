@@ -4,7 +4,7 @@ function formatNum(n, decimals = 1) {
   return Number(n).toFixed(decimals)
 }
 
-export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics, treeCrownDetection, analysisLoading }) {
+export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics, treeCrownDetection, gediData, analysisLoading }) {
   if (!analysisResult && !analysisLoading) {
     return (
       <aside className="results-panel">
@@ -18,7 +18,7 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
     return (
       <aside className="results-panel">
         <h2>Analysis results</h2>
-        <p className="muted">Analyzing area… Tree crown detection (DeepForest), satellite metrics, and biomass.</p>
+        <p className="muted">Analyzing area… Tree crowns (DeepForest), GEDI (ISS lidar), satellite metrics, and biomass.</p>
       </aside>
     )
   }
@@ -39,6 +39,36 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
             <span className="card-label">{treeCrownDetection.source}</span>
             <span className="card-value">{treeCrownDetection.count} crowns</span>
           </div>
+        </section>
+      )}
+      {gediData && (
+        <section className="gedi-section">
+          <h3>GEDI (ISS lidar)</h3>
+          <p className="gedi-desc muted">NASA GEDI L4A: laser pulse measurements of height and biomass density.</p>
+          {gediData.error ? (
+            <p className="gedi-error muted">{gediData.error}</p>
+          ) : (
+            <div className="gedi-cards">
+              {gediData.mean_agbd_Mg_per_ha != null && (
+                <div className="card">
+                  <span className="card-label">Mean AGBD</span>
+                  <span className="card-value">{gediData.mean_agbd_Mg_per_ha} Mg/ha</span>
+                </div>
+              )}
+              {gediData.footprint_count != null && gediData.footprint_count > 0 && (
+                <div className="card">
+                  <span className="card-label">Footprints</span>
+                  <span className="card-value">{gediData.footprint_count}</span>
+                </div>
+              )}
+              {gediData.mean_rh98_m != null && (
+                <div className="card">
+                  <span className="card-label">Mean RH98 (height)</span>
+                  <span className="card-value">{gediData.mean_rh98_m} m</span>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
       {satelliteMetrics && (

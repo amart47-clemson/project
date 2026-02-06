@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from tile_utils import stitch_bbox, pixel_to_lnglat_in_stitched, get_zoom_for_bbox
 from species_estimator import estimate_species_for_detections
+from gedi import fetch_gedi_l4a_for_bbox
 
 app = FastAPI(title="Tree Crown Detection (DeepForest)")
 app.add_middleware(
@@ -134,11 +135,29 @@ def health():
     return {"status": "ok", "model": "DeepForest (RetinaNet)"}
 
 
+class GediRequest(BaseModel):
+    """Bounding box [west, south, east, north] for GEDI L4A lookup."""
+    bbox: List[float]
+
+
+@app.post("/api/gedi")
+def gedi_l4a(req: GediRequest):
+    """Fetch NASA GEDI L4A (ISS lidar) biomass and height for the bbox. Coverage: 51.6°N–51.6°S. Requires Earthdata login."""
+    if len(req.bbox) != 4:
+        raise HTTPException(status_code=400, detail="bbox must be [west, south, east, north]")
+    west, south, east, north = req.bbox
+    if west >= east or south >= north:
+        raise HTTPException(status_code=400, detail="Invalid bbox")
+    result = fetch_gedi_l4a_for_bbox(west, south, east, north)
+    return result
+
+
 @app.get("/")
 def root():
     return {
-        "message": "Tree Crown Detection API (DeepForest)",
+        "message": "Tree Crown Detection API (DeepForest + GEDI)",
         "docs": "/docs",
         "health": "/api/health",
         "detect_trees": "POST /api/detect-trees",
+        "gedi": "POST /api/gedi (NASA GEDI L4A biomass)",
     }
