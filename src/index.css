@@ -1,0 +1,93 @@
+:root {
+  --bg: #0d1419;
+  --surface: #151d26;
+  --surface2: #1c2733;
+  --border: #2a3a48;
+  --text: #e8edf2;
+  --text-muted: #8b9cad;
+  --accent: #2d9d78;
+  --accent-hover: #38c990;
+  --gold: #c9a227;
+  --danger: #c94a47;
+  --radius: 10px;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Leaflet overrides for dark theme */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--surface) !important;
+}
+.leaflet-control-zoom a {
+  background: var(--surface2) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: var(--border) !important;
+}
+.leaflet-control-attribution {
+  background: rgba(13, 20, 25, 0.85) !important;
+  color: var(--text-muted) !important;
+  font-size: 10px;
+}
+.leaflet-control-attribution a {
+  color: var(--accent) !important;
+}
+
+.leaflet-control-layers {
+  background: var(--surface2) !important;
+  border: 1px solid var(--border) !important;
+}
+.leaflet-control-layers-expanded {
+  padding: 0.5rem !important;
+  color: var(--text) !important;
+}
+.leaflet-control-layers label {
+  color: var(--text) !important;
+  font-size: 0.85rem;
+}
+.leaflet-control-layers-selector {
+  margin-right: 0.5rem;
+}
+
+/* Geoman drawing toolbar */
+.leaflet-pm-toolbar .leaflet-buttons-control-button {
+  background: var(--surface2) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+.leaflet-pm-toolbar .leaflet-buttons-control-button:hover {
+  background: var(--border) !important;
+}
+.leaflet-pm-toolbar .leaflet-buttons-control-button.active {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+}
+.leaflet-pm-actions-container {
+  background: var(--surface2) !important;
+  border-color: var(--border) !important;
+}
+.leaflet-pm-actions-container button {
+  color: var(--text) !important;
+}
