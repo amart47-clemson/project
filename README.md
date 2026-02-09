@@ -111,3 +111,5 @@ When the **backend is not running**, the app uses a synthetic tree inventory for
 - **Frontend:** React 18, Vite, Leaflet + react-leaflet, Geoman (drawing), Turf (area/bbox)
 - **Backend:** FastAPI, DeepForest (RetinaNet), Pillow, mercantile, requests
 - **Map/imagery:** ESRI World Imagery (tiles), Nominatim (geocoding)
+
+
