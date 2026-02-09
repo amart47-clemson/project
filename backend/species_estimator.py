@@ -1,13 +1,17 @@
 """
 Tree species estimation from RGB crown crops.
 Uses color and texture features to classify conifer vs deciduous, then assigns
-species within each group. Structured so a trained CNN (e.g. TreeSatAI-style) can be plugged in later.
+species within each group. Uses area-level phenology (Oct/May NDVI) when available
+to bias conifer vs deciduous; supports optional dominant_species from user.
 """
-from typing import List, Tuple
+import random
+from typing import List, Optional, Tuple
 
 # Species keys matching frontend SPECIES_PARAMS (conifer vs deciduous)
 CONIFER_SPECIES = ["pine", "spruce", "fir", "cedar"]
 DECIDUOUS_SPECIES = ["oak", "maple", "birch", "poplar", "walnut"]
+# When conifer-dominated, bias toward pine (e.g. pine-heavy stands)
+PINE_WEIGHT_IN_CONIFER = 0.72  # ~72% pine among conifers when no other hint
 
 
 def _crop_safe(img, xmin: float, ymin: float, xmax: float, ymax: float, padding: float = 0.1):
@@ -103,11 +107,11 @@ def estimate_species_from_crop(crop) -> str:
     is_conifer = green_dominant and low_red and (f["texture"] < 55 or f["green_dom"] > 1.2)
 
     if is_conifer:
-        # Favor pine when clearly conifer (many stands are pine-dominated); else spread
-        t = (f["mean_g"] / 200.0 + f["std_g"] / 40.0) % 1.0
-        if t < 0.5:
+        # Strong pine bias when conifer (many stands are pine-dominated)
+        r = random.random()
+        if r < PINE_WEIGHT_IN_CONIFER:
             return "pine"
-        idx = int(t * len(CONIFER_SPECIES)) % len(CONIFER_SPECIES)
+        idx = int(r * len(CONIFER_SPECIES)) % len(CONIFER_SPECIES)
         return CONIFER_SPECIES[idx]
 
     # Deciduous: spread by red/green and texture
@@ -118,10 +122,49 @@ def estimate_species_from_crop(crop) -> str:
     return DECIDUOUS_SPECIES[idx]
 
 
-def estimate_species_for_detections(img, detections_xyxy: List[Tuple[float, float, float, float]]) -> List[str]:
+def _conifer_tendency_from_phenology(october_ndvi: Optional[float], may_ndvi: Optional[float]) -> Optional[float]:
+    """
+    From Oct/May NDVI, compute conifer tendency in [0, 1].
+    Large May−Oct = deciduous (leaf-on in May, off in Oct) → low conifer tendency.
+    Small difference = evergreen/conifer → high conifer tendency.
+    """
+    if october_ndvi is None and may_ndvi is None:
+        return None
+    oct = october_ndvi if october_ndvi is not None else may_ndvi
+    may = may_ndvi if may_ndvi is not None else october_ndvi
+    if oct is None or may is None:
+        return None
+    diff = may - oct  # positive = deciduous-dominated
+    # Map diff to [0,1]: diff >= 0.2 → conifer_tendency 0; diff <= 0 → conifer_tendency 1
+    tendency = 1.0 - min(1.0, max(0.0, (diff + 0.05) / 0.25))
+    return tendency
+
+
+def _apply_dominant_species(species_list: List[str], dominant: str) -> List[str]:
+    """Bias species list toward dominant (e.g. 80% dominant, 20% from original)."""
+    valid = set(CONIFER_SPECIES + DECIDUOUS_SPECIES + ["mixed"])
+    if dominant not in valid:
+        return species_list
+    out = []
+    for s in species_list:
+        if random.random() < 0.8:
+            out.append(dominant)
+        else:
+            out.append(s)
+    return out
+
+
+def estimate_species_for_detections(
+    img,
+    detections_xyxy: List[Tuple[float, float, float, float]],
+    phenology_hint: Optional[dict] = None,
+    dominant_species: Optional[str] = None,
+) -> List[str]:
     """
     img: PIL Image or numpy HxWx3 (RGB).
     detections_xyxy: list of (xmin, ymin, xmax, ymax) in pixel coords.
+    phenology_hint: optional { "october_ndvi": float, "may_ndvi": float } from Sentinel-2.
+    dominant_species: optional user hint, e.g. "pine", "oak".
     Returns list of species keys, one per detection.
     """
     import numpy as np
@@ -139,4 +182,25 @@ def estimate_species_for_detections(img, detections_xyxy: List[Tuple[float, floa
         crop = _crop_safe(arr, xmin, ymin, xmax, ymax, padding=0.15)
         sp = estimate_species_from_crop(crop)
         species_list.append(sp)
+
+    # Phenology nudge: conifer vs deciduous from Oct/May NDVI
+    if phenology_hint:
+        oct_ndvi = phenology_hint.get("october_ndvi") if isinstance(phenology_hint, dict) else None
+        may_ndvi = phenology_hint.get("may_ndvi") if isinstance(phenology_hint, dict) else None
+        conifer_tendency = _conifer_tendency_from_phenology(oct_ndvi, may_ndvi)
+        if conifer_tendency is not None:
+            for i in range(len(species_list)):
+                s = species_list[i]
+                in_conifer_group = s in CONIFER_SPECIES
+                in_deciduous_group = s in DECIDUOUS_SPECIES
+                r = random.random()
+                if conifer_tendency >= 0.6 and in_deciduous_group and r < 0.65:
+                    species_list[i] = "pine" if random.random() < PINE_WEIGHT_IN_CONIFER else random.choice(CONIFER_SPECIES)
+                elif conifer_tendency <= 0.4 and in_conifer_group and r < 0.65:
+                    species_list[i] = random.choice(DECIDUOUS_SPECIES)
+
+    # User-set dominant species overrides a large share of assignments
+    if dominant_species:
+        species_list = _apply_dominant_species(species_list, dominant_species.lower().strip())
+
     return species_list

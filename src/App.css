@@ -93,6 +93,24 @@
   background: var(--surface);
   color: var(--text);
 }
+.dominant-species-row {
+  margin-top: 0.35rem;
+}
+.dominant-species-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.dominant-species-select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  min-width: 120px;
+}
 .hint {
   margin: 0;
   font-size: 0.8rem;
@@ -158,6 +176,15 @@
 }
 .btn-accent:hover {
   background: var(--accent-hover);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: var(--border);
+  color: var(--text);
 }
 .map {
   flex: 1;
@@ -303,6 +330,38 @@
 .satellite-source {
   font-size: 0.75rem;
   margin: 0;
+}
+
+.sentinel2-timeseries-section {
+  margin-bottom: 0.5rem;
+}
+.sentinel2-timeseries-section h3 {
+  margin-top: 0;
+}
+.sentinel2-desc {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+}
+.sentinel2-error {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.sentinel2-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.sentinel2-month .indices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.blended-source {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.8rem;
 }
 
 .btn:disabled {

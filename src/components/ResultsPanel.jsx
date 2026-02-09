@@ -4,7 +4,7 @@ function formatNum(n, decimals = 1) {
   return Number(n).toFixed(decimals)
 }
 
-export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics, treeCrownDetection, gediData, analysisLoading }) {
+export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics, treeCrownDetection, gediData, sentinel2Timeseries, analysisLoading }) {
   if (!analysisResult && !analysisLoading) {
     return (
       <aside className="results-panel">
@@ -18,13 +18,13 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
     return (
       <aside className="results-panel">
         <h2>Analysis results</h2>
-        <p className="muted">Analyzing area… Tree crowns (DeepForest), GEDI (ISS lidar), satellite metrics, and biomass.</p>
+        <p className="muted">Analyzing area… Tree crowns (DeepForest), GEDI (ISS lidar), Sentinel-2 time-series, satellite metrics, and biomass.</p>
       </aside>
     )
   }
 
   const { summary, trees } = analysisResult
-  const { totalBiomassKg, totalCarbonKg, totalCo2EqKg, totalVolumeM3, treeCount, bySpecies } = summary
+  const { totalBiomassKg, totalCarbonKg, totalCo2EqKg, totalVolumeM3, treeCount, bySpecies, dataSources } = summary
 
   return (
     <aside className="results-panel">
@@ -71,6 +71,41 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
           )}
         </section>
       )}
+      {sentinel2Timeseries && (sentinel2Timeseries.october || sentinel2Timeseries.may || sentinel2Timeseries.error) && (
+        <section className="sentinel2-timeseries-section">
+          <h3>Time-Series Optical (Sentinel-2)</h3>
+          <p className="sentinel2-desc muted">October &amp; May imagery: NDVI, EVI, SAVI for phenology (leaf-on/leaf-off).</p>
+          {sentinel2Timeseries.error ? (
+            <p className="sentinel2-error muted">{sentinel2Timeseries.error}</p>
+          ) : (
+            <div className="sentinel2-cards">
+              {sentinel2Timeseries.october && (
+                <div className="card sentinel2-month">
+                  <span className="card-label">October</span>
+                  <div className="indices">
+                    <span>NDVI {sentinel2Timeseries.october.ndvi}</span>
+                    <span>EVI {sentinel2Timeseries.october.evi}</span>
+                    <span>SAVI {sentinel2Timeseries.october.savi}</span>
+                  </div>
+                </div>
+              )}
+              {sentinel2Timeseries.may && (
+                <div className="card sentinel2-month">
+                  <span className="card-label">May</span>
+                  <div className="indices">
+                    <span>NDVI {sentinel2Timeseries.may.ndvi}</span>
+                    <span>EVI {sentinel2Timeseries.may.evi}</span>
+                    <span>SAVI {sentinel2Timeseries.may.savi}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {sentinel2Timeseries.source && !sentinel2Timeseries.error && (
+            <p className="satellite-source muted">{sentinel2Timeseries.source}</p>
+          )}
+        </section>
+      )}
       {satelliteMetrics && (
         <section className="satellite-section">
           <h3>Satellite-derived</h3>
@@ -109,6 +144,9 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
           <span className="card-value">{totalVolumeM3.toFixed(2)} m³</span>
         </div>
       </div>
+      {dataSources && dataSources.length > 0 && (
+        <p className="blended-source muted">Totals blended with {dataSources.join(' + ')}.</p>
+      )}
       <section className="species-breakdown">
         <h3>Species breakdown</h3>
         <ul>

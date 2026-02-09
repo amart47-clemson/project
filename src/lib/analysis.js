@@ -145,6 +145,55 @@ export function runAnalysis(trees) {
   }
 }
 
+const CARBON_FRACTION_FOR_REMOTE = 0.47
+const CO2_EQ_FACTOR = 3.67
+
+/**
+ * Run analysis and blend with NASA GEDI and Sentinel-2 when available.
+ * - GEDI: when mean_agbd_Mg_per_ha is present, use it for area biomass (Mg/ha → kg) and blend with tree-based.
+ * - Sentinel-2: use mean NDVI (Oct/May) to scale biomass (phenology / vegetation density).
+ */
+export function runAnalysisWithRemoteData(trees, areaHa, gediData, sentinel2Timeseries) {
+  const base = runAnalysis(trees)
+  let totalBiomassKg = base.summary.totalBiomassKg
+  const dataSources = []
+
+  // NASA GEDI: area-based biomass (Mg/ha) → total kg
+  if (gediData && !gediData.error && gediData.mean_agbd_Mg_per_ha != null && gediData.footprint_count > 0 && areaHa > 0) {
+    const gediBiomassKg = areaHa * gediData.mean_agbd_Mg_per_ha * 1000 // Mg/ha → kg
+    totalBiomassKg = 0.5 * totalBiomassKg + 0.5 * gediBiomassKg
+    dataSources.push('GEDI (NASA ISS lidar)')
+  }
+
+  // Sentinel-2: mean NDVI from Oct/May to scale biomass (vegetation density / phenology)
+  if (sentinel2Timeseries && !sentinel2Timeseries.error) {
+    const oct = sentinel2Timeseries.october?.ndvi
+    const may = sentinel2Timeseries.may?.ndvi
+    const meanNdvi = (oct != null && may != null) ? (oct + may) / 2 : (oct ?? may)
+    if (meanNdvi != null && meanNdvi >= 0) {
+      const factor = Math.max(0.85, Math.min(1.15, 0.85 + 0.3 * meanNdvi))
+      totalBiomassKg *= factor
+      dataSources.push('Sentinel-2 (NDVI/EVI/SAVI)')
+    }
+  }
+
+  const totalCarbonKg = totalBiomassKg * CARBON_FRACTION_FOR_REMOTE
+  const totalCo2EqKg = totalCarbonKg * CO2_EQ_FACTOR
+
+  return {
+    trees: base.trees,
+    summary: {
+      treeCount: base.summary.treeCount,
+      totalBiomassKg,
+      totalCarbonKg,
+      totalCo2EqKg,
+      totalVolumeM3: base.summary.totalVolumeM3,
+      bySpecies: base.summary.bySpecies,
+      dataSources: dataSources.length ? dataSources : undefined,
+    },
+  }
+}
+
 /**
  * Area of circle in hectares (radius in meters).
  */

@@ -52,6 +52,7 @@ export default function MapView({
   const [traceMode, setTraceMode] = useState(false)
   const [tracePoints, setTracePoints] = useState([])
   const [tracedBoundary, setTracedBoundary] = useState(null)
+  const [dominantSpecies, setDominantSpecies] = useState('')
   const mapRef = useRef(null)
 
   const addTracePoint = (point) => {
@@ -61,6 +62,10 @@ export default function MapView({
     setTracePoints([])
     setTracedBoundary(null)
     setTraceMode(false)
+  }
+  const undoLastPoint = () => {
+    setTracePoints((prev) => (prev.length <= 1 ? [] : prev.slice(0, -1)))
+    setTracedBoundary(null)
   }
   const closeTraceAndUse = () => {
     const result = tracedPolygonToArea(tracePoints)
@@ -97,17 +102,18 @@ export default function MapView({
   const pathYards = pathLengthYards(tracePoints)
 
   const handleAnalyzeClick = () => {
+    const extra = dominantSpecies ? { dominantSpecies: dominantSpecies.trim() } : {}
     if (hasTracedBoundary) {
-      onAnalyze({ areaHa: tracedBoundary.areaHa, center: tracedBoundary.center, bbox: tracedBoundary.bbox })
+      onAnalyze({ areaHa: tracedBoundary.areaHa, center: tracedBoundary.center, bbox: tracedBoundary.bbox, ...extra })
       return
     }
     if (hasDrawnAreas) {
       const bbox = bboxFromDrawnShapes(drawnShapes)
-      onAnalyze({ areaHa: drawnAreaHa, center: combinedCenter(drawnShapes), bbox })
+      onAnalyze({ areaHa: drawnAreaHa, center: combinedCenter(drawnShapes), bbox, ...extra })
     } else {
       const [lat, lng] = center
       const bbox = bboxFromCircle(lat, lng, radiusM)
-      onAnalyze({ areaHa: circleAreaHa(radiusM), center: [lat, lng], bbox })
+      onAnalyze({ areaHa: circleAreaHa(radiusM), center: [lat, lng], bbox, ...extra })
     }
   }
 
@@ -146,6 +152,27 @@ export default function MapView({
             />
           </label>
         </div>
+        <div className="dominant-species-row">
+          <label>
+            <span>Dominant species (optional):</span>
+            <select
+              value={dominantSpecies}
+              onChange={e => setDominantSpecies(e.target.value)}
+              className="dominant-species-select"
+            >
+              <option value="">— None —</option>
+              <option value="pine">Pine</option>
+              <option value="fir">Fir</option>
+              <option value="spruce">Spruce</option>
+              <option value="cedar">Cedar</option>
+              <option value="oak">Oak</option>
+              <option value="maple">Maple</option>
+              <option value="birch">Birch</option>
+              <option value="poplar">Poplar</option>
+              <option value="walnut">Walnut</option>
+            </select>
+          </label>
+        </div>
         <div className="trace-boundary-row">
           <button
             type="button"
@@ -164,6 +191,9 @@ export default function MapView({
                   </button>
                 )}
               </span>
+              <button type="button" className="btn btn-secondary" onClick={undoLastPoint} title="Remove last point">
+                Undo
+              </button>
               <button type="button" className="btn-clear" onClick={clearTrace}>
                 Clear trace
               </button>
@@ -173,6 +203,9 @@ export default function MapView({
         {hasTracedBoundary && (
           <p className="drawn-summary">
             Boundary: <strong>{tracedBoundary.areaHa.toFixed(2)} ha</strong> · Perimeter: <strong>{tracedBoundary.perimeterYards.toFixed(0)} yd</strong>
+            <button type="button" className="btn-clear" onClick={clearTrace}>
+              Clear boundary
+            </button>
           </p>
         )}
         <p className="hint">

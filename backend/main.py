@@ -13,11 +13,21 @@ from pydantic import BaseModel
 from tile_utils import stitch_bbox, pixel_to_lnglat_in_stitched, get_zoom_for_bbox
 from species_estimator import estimate_species_for_detections
 from gedi import fetch_gedi_l4a_for_bbox
+from sentinel2_timeseries import fetch_sentinel2_timeseries
+
+_app_dir = os.path.dirname(os.path.abspath(__file__))
+_static_dir = os.path.join(_app_dir, "static")
+
+_origins = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if _origins:
+    allow_origins = [o.strip() for o in _origins.split(",") if o.strip()]
+else:
+    allow_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"]
 
 app = FastAPI(title="Tree Crown Detection (DeepForest)")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,6 +38,8 @@ class BboxRequest(BaseModel):
     """Bounding box in [west, south, east, north] (WGS84)."""
     bbox: List[float]  # [west, south, east, north]
     zoom: Optional[int] = None  # optional; auto if not set
+    phenology: Optional[dict] = None  # optional { october_ndvi, may_ndvi } from Sentinel-2 for species
+    dominant_species: Optional[str] = None  # optional user hint, e.g. "pine", "oak"
 
 
 class TreeDetection(BaseModel):
@@ -66,6 +78,8 @@ def run_deepforest(image_path: str, score_thresh: float = 0.05):
 
 @app.post("/api/detect-trees", response_model=DetectResponse)
 def detect_trees(req: BboxRequest):
+    phenology = getattr(req, "phenology", None) or {}
+    dominant_species = getattr(req, "dominant_species", None) or None
     if len(req.bbox) != 4:
         raise HTTPException(status_code=400, detail="bbox must be [west, south, east, north]")
     west, south, east, north = req.bbox
@@ -102,7 +116,11 @@ def detect_trees(req: BboxRequest):
         (float(row["xmin"]), float(row["ymin"]), float(row["xmax"]), float(row["ymax"]))
         for _, row in df.iterrows()
     ]
-    species_list = estimate_species_for_detections(img, boxes_xyxy)
+    species_list = estimate_species_for_detections(
+        img, boxes_xyxy,
+        phenology_hint=phenology if phenology else None,
+        dominant_species=dominant_species,
+    )
 
     trees = []
     for i, (_, row) in enumerate(df.iterrows()):
@@ -152,12 +170,54 @@ def gedi_l4a(req: GediRequest):
     return result
 
 
-@app.get("/")
-def root():
-    return {
-        "message": "Tree Crown Detection API (DeepForest + GEDI)",
-        "docs": "/docs",
-        "health": "/api/health",
-        "detect_trees": "POST /api/detect-trees",
-        "gedi": "POST /api/gedi (NASA GEDI L4A biomass)",
-    }
+class Sentinel2Request(BaseModel):
+    """Bounding box [west, south, east, north] for Sentinel-2 time-series (October & May)."""
+    bbox: List[float]
+
+
+@app.post("/api/sentinel2-timeseries")
+def sentinel2_timeseries(req: Sentinel2Request):
+    """Fetch Sentinel-2 L2A October & May imagery; return NDVI, EVI, SAVI per month (phenology)."""
+    if len(req.bbox) != 4:
+        raise HTTPException(status_code=400, detail="bbox must be [west, south, east, north]")
+    west, south, east, north = req.bbox
+    if west >= east or south >= north:
+        raise HTTPException(status_code=400, detail="Invalid bbox")
+    result = fetch_sentinel2_timeseries(west, south, east, north)
+    return result
+
+
+# Serve built frontend when backend/static exists (single-URL deployment); else API info at /
+if os.path.isdir(_static_dir) and os.path.isfile(os.path.join(_static_dir, "index.html")):
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    assets_dir = os.path.join(_static_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    _index_path = os.path.join(_static_dir, "index.html")
+
+    @app.get("/")
+    def serve_root():
+        return FileResponse(_index_path)
+
+    @app.get("/index.html")
+    def serve_index():
+        return FileResponse(_index_path)
+
+    @app.get("/{path:path}")
+    def serve_spa(path: str):
+        if path.startswith("api/") or path.startswith("assets/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(_index_path)
+else:
+    @app.get("/")
+    def root():
+        return {
+            "message": "Tree Crown Detection API (DeepForest + GEDI + Sentinel-2)",
+            "docs": "/docs",
+            "health": "/api/health",
+            "detect_trees": "POST /api/detect-trees",
+            "gedi": "POST /api/gedi (NASA GEDI L4A biomass)",
+            "sentinel2_timeseries": "POST /api/sentinel2-timeseries (Oct/May NDVI, EVI, SAVI)",
+        }
