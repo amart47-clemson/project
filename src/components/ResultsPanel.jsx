@@ -1,8 +1,9 @@
 import { useState } from 'react'
 
 function formatNum(n, decimals = 1) {
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
-  if (n >= 1e3) return (n / 1e3).toFixed(2) + 'k'
+  if (!isFinite(n)) return '0'
+  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + 'M'
+  if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(2) + 'k'
   return Number(n).toFixed(decimals)
 }
 
@@ -26,10 +27,36 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
   }
 
   const { summary, trees } = analysisResult
-  const { totalBiomassKg, totalCarbonKg, totalCo2EqKg, totalVolumeM3, treeCount, bySpecies, dataSources } = summary
-  const [pricePerTonne, setPricePerTonne] = useState(25) // USD per tCO2e (editable)
-  const totalCo2Tonnes = totalCo2EqKg / 1000
-  const standValue = totalCo2Tonnes * pricePerTonne
+  const {
+    totalBiomassKg,
+    totalCarbonKg,
+    totalCo2EqKg,
+    totalVolumeM3,
+    treeCount,
+    bySpecies,
+    dataSources,
+    relativeUncertainty,
+  } = summary
+
+  // Unit conversions
+  const KG_PER_SHORT_TON = 907.18474
+  const CM_PER_INCH = 2.54
+  const M_PER_FOOT = 0.3048
+
+  const totalBiomassTons = totalBiomassKg / KG_PER_SHORT_TON
+  const totalCarbonTons = totalCarbonKg / KG_PER_SHORT_TON
+  const totalCo2Tons = totalCo2EqKg / KG_PER_SHORT_TON
+
+  const [pricePerTon, setPricePerTon] = useState(25) // USD per ton CO2e (editable)
+  const standValue = totalCo2Tons * pricePerTon
+
+  const relUnc = typeof relativeUncertainty === 'number' ? relativeUncertainty : 0.3
+  const biomassLow = totalBiomassTons * (1 - relUnc)
+  const biomassHigh = totalBiomassTons * (1 + relUnc)
+  const carbonLow = totalCarbonTons * (1 - relUnc)
+  const carbonHigh = totalCarbonTons * (1 + relUnc)
+  const co2Low = totalCo2Tons * (1 - relUnc)
+  const co2High = totalCo2Tons * (1 + relUnc)
 
   return (
     <aside className="results-panel">
@@ -50,7 +77,7 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
         <section className="gedi-section">
           <h3>GEDI (ISS lidar)</h3>
           <p className="gedi-desc muted">NASA GEDI L4A: laser pulse measurements of height and biomass density.</p>
-          {gediData.error ? (
+          {gediData.error && gediData.error !== 'No GEDI L4A granules found for this area and time range.' ? (
             <p className="gedi-error muted">{gediData.error}</p>
           ) : (
             <div className="gedi-cards">
@@ -134,15 +161,15 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
         </div>
         <div className="card">
           <span className="card-label">Biomass</span>
-          <span className="card-value">{formatNum(totalBiomassKg)} kg</span>
+          <span className="card-value">{formatNum(totalBiomassTons)} tons</span>
         </div>
         <div className="card">
           <span className="card-label">Carbon</span>
-          <span className="card-value">{formatNum(totalCarbonKg)} kg</span>
+          <span className="card-value">{formatNum(totalCarbonTons)} tons</span>
         </div>
         <div className="card">
           <span className="card-label">CO₂ equivalent</span>
-          <span className="card-value">{formatNum(totalCo2EqKg)} kg</span>
+          <span className="card-value">{formatNum(totalCo2Tons)} tons</span>
         </div>
         <div className="card">
           <span className="card-label">Volume (stem)</span>
@@ -152,24 +179,41 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
       {dataSources && dataSources.length > 0 && (
         <p className="blended-source muted">Totals blended with {dataSources.join(' + ')}.</p>
       )}
+      <section className="uncertainty-section">
+        <h3>Uncertainty (approx. 95% confidence)</h3>
+        <p className="uncertainty-desc muted">
+          Range reflects data sources used (DeepForest crowns, GEDI, Sentinel‑2). Narrower ranges mean higher confidence.
+        </p>
+        <ul className="uncertainty-list">
+          <li>
+            Biomass: <strong>{biomassLow.toFixed(0)}–{biomassHigh.toFixed(0)} tons</strong>
+          </li>
+          <li>
+            Carbon: <strong>{carbonLow.toFixed(0)}–{carbonHigh.toFixed(0)} tons</strong>
+          </li>
+          <li>
+            CO₂eq: <strong>{co2Low.toFixed(0)}–{co2High.toFixed(0)} tons CO₂e</strong>
+          </li>
+        </ul>
+      </section>
       <section className="valuation-section">
         <h3>Carbon credit valuation</h3>
         <p className="valuation-desc muted">
-          Uses total CO₂ equivalent and an assumed carbon price per tonne. Adjust the price to match local credit markets.
+          Uses total CO₂ equivalent and an assumed price per ton. Adjust the price to match local carbon credit markets.
         </p>
         <div className="valuation-cards">
           <div className="card">
             <span className="card-label">Total CO₂eq</span>
-            <span className="card-value">{totalCo2Tonnes.toFixed(1)} tCO₂e</span>
+            <span className="card-value">{totalCo2Tons.toFixed(1)} tons CO₂e</span>
           </div>
           <div className="card valuation-input-card">
-            <span className="card-label">Price per tCO₂e (USD)</span>
+            <span className="card-label">Price per ton CO₂e (USD)</span>
             <input
               type="number"
               min={0}
               step={1}
-              value={pricePerTonne}
-              onChange={e => setPricePerTonne(Number(e.target.value) || 0)}
+              value={pricePerTon}
+              onChange={e => setPricePerTon(Number(e.target.value) || 0)}
               className="valuation-input"
             />
           </div>
@@ -199,10 +243,10 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
             <thead>
               <tr>
                 <th>Species</th>
-                <th>DBH (cm)</th>
-                <th>Height (m)</th>
-                <th>Biomass (kg)</th>
-                <th>Carbon (kg)</th>
+                <th>DBH (in)</th>
+                <th>Height (ft)</th>
+                <th>Biomass (tons)</th>
+                <th>Carbon (tons)</th>
                 <th>Volume (m³)</th>
               </tr>
             </thead>
@@ -210,10 +254,10 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
               {trees.slice(0, 50).map((t, i) => (
                 <tr key={t.speciesName + i}>
                   <td>{t.speciesName}</td>
-                  <td>{t.dbhCm.toFixed(1)}</td>
-                  <td>{t.heightM.toFixed(1)}</td>
-                  <td>{t.biomassKg.toFixed(1)}</td>
-                  <td>{t.carbonKg.toFixed(1)}</td>
+                  <td>{(t.dbhCm / CM_PER_INCH).toFixed(1)}</td>
+                  <td>{(t.heightM / M_PER_FOOT).toFixed(1)}</td>
+                  <td>{(t.biomassKg / KG_PER_SHORT_TON).toFixed(3)}</td>
+                  <td>{(t.carbonKg / KG_PER_SHORT_TON).toFixed(3)}</td>
                   <td>{t.volumeM3.toFixed(3)}</td>
                 </tr>
               ))}

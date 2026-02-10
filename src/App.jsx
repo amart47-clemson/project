@@ -44,6 +44,7 @@ export default function App() {
       let detectionResult = null
       let gediResult = null
       let sentinel2Result = null
+      let hasDetections = false
       if (requestBbox && requestBbox.length === 4) {
         const [gediResult_, sentinel2Result_] = await Promise.all([
           fetchGediForBbox(requestBbox, apiBase),
@@ -65,6 +66,7 @@ export default function App() {
         })
         if (detectionResult?.count > 0 && detectionResult.trees?.length) {
           trees = detectionsToTrees(detectionResult.trees)
+          hasDetections = true
           setTreeCrownDetection({
             count: detectionResult.count,
             source: 'DeepForest (RetinaNet)',
@@ -76,7 +78,7 @@ export default function App() {
       }
       const satelliteResult = await fetchSatelliteMetrics([lat, lng], radiusForSatellite)
       setSatelliteMetrics(satelliteResult)
-      const result = runAnalysisWithRemoteData(trees, ha, gediResult, sentinel2Result)
+      const result = runAnalysisWithRemoteData(trees, ha, gediResult, sentinel2Result, hasDetections)
       setAnalysisResult(result)
     } finally {
       setAnalysisLoading(false)

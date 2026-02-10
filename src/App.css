@@ -394,6 +394,25 @@
   width: 100%;
 }
 
+.uncertainty-section {
+  margin-bottom: 0.75rem;
+}
+.uncertainty-section h3 {
+  margin-top: 0;
+}
+.uncertainty-desc {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+}
+.uncertainty-list {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+}
+.uncertainty-list li + li {
+  margin-top: 0.15rem;
+}
+
 .btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;

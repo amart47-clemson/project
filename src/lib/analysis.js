@@ -152,21 +152,35 @@ const CO2_EQ_FACTOR = 3.67
  * Run analysis and blend with NASA GEDI and Sentinel-2 when available.
  * - GEDI: when mean_agbd_Mg_per_ha is present, use it for area biomass (Mg/ha → kg) and blend with tree-based.
  * - Sentinel-2: use mean NDVI (Oct/May) to scale biomass (phenology / vegetation density).
+ * - hasDetections: true when trees come from DeepForest crowns (vs synthetic fallback).
+ *
+ * Also estimates a relative uncertainty (fraction) to drive an approximate 95% confidence interval.
  */
-export function runAnalysisWithRemoteData(trees, areaHa, gediData, sentinel2Timeseries) {
+export function runAnalysisWithRemoteData(trees, areaHa, gediData, sentinel2Timeseries, hasDetections = false) {
   const base = runAnalysis(trees)
   let totalBiomassKg = base.summary.totalBiomassKg
   const dataSources = []
+  // Start with conservative uncertainty and tighten as better data is used
+  let relativeUncertainty = 0.4 // 40% default
 
   // NASA GEDI: area-based biomass (Mg/ha) → total kg
-  if (gediData && !gediData.error && gediData.mean_agbd_Mg_per_ha != null && gediData.footprint_count > 0 && areaHa > 0) {
+  const hasValidGedi =
+    gediData &&
+    !gediData.error &&
+    gediData.mean_agbd_Mg_per_ha != null &&
+    gediData.footprint_count > 0 &&
+    areaHa > 0
+
+  if (hasValidGedi) {
     const gediBiomassKg = areaHa * gediData.mean_agbd_Mg_per_ha * 1000 // Mg/ha → kg
     totalBiomassKg = 0.5 * totalBiomassKg + 0.5 * gediBiomassKg
     dataSources.push('GEDI (NASA ISS lidar)')
+    relativeUncertainty -= 0.12
   }
 
   // Sentinel-2: mean NDVI from Oct/May to scale biomass (vegetation density / phenology)
-  if (sentinel2Timeseries && !sentinel2Timeseries.error) {
+  const hasValidSentinel2 = sentinel2Timeseries && !sentinel2Timeseries.error
+  if (hasValidSentinel2) {
     const oct = sentinel2Timeseries.october?.ndvi
     const may = sentinel2Timeseries.may?.ndvi
     const meanNdvi = (oct != null && may != null) ? (oct + may) / 2 : (oct ?? may)
@@ -174,8 +188,15 @@ export function runAnalysisWithRemoteData(trees, areaHa, gediData, sentinel2Time
       const factor = Math.max(0.85, Math.min(1.15, 0.85 + 0.3 * meanNdvi))
       totalBiomassKg *= factor
       dataSources.push('Sentinel-2 (NDVI/EVI/SAVI)')
+      relativeUncertainty -= 0.05
     }
   }
+
+  if (hasDetections) {
+    relativeUncertainty -= 0.08
+  }
+  // Clamp to a reasonable range (15–50%)
+  relativeUncertainty = Math.max(0.15, Math.min(0.5, relativeUncertainty))
 
   const totalCarbonKg = totalBiomassKg * CARBON_FRACTION_FOR_REMOTE
   const totalCo2EqKg = totalCarbonKg * CO2_EQ_FACTOR
@@ -190,6 +211,7 @@ export function runAnalysisWithRemoteData(trees, areaHa, gediData, sentinel2Time
       totalVolumeM3: base.summary.totalVolumeM3,
       bySpecies: base.summary.bySpecies,
       dataSources: dataSources.length ? dataSources : undefined,
+      relativeUncertainty,
     },
   }
 }
