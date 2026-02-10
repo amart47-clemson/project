@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 function formatNum(n, decimals = 1) {
   if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'
   if (n >= 1e3) return (n / 1e3).toFixed(2) + 'k'
@@ -25,6 +27,9 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
 
   const { summary, trees } = analysisResult
   const { totalBiomassKg, totalCarbonKg, totalCo2EqKg, totalVolumeM3, treeCount, bySpecies, dataSources } = summary
+  const [pricePerTonne, setPricePerTonne] = useState(25) // USD per tCO2e (editable)
+  const totalCo2Tonnes = totalCo2EqKg / 1000
+  const standValue = totalCo2Tonnes * pricePerTonne
 
   return (
     <aside className="results-panel">
@@ -147,6 +152,33 @@ export default function ResultsPanel({ analysisResult, areaHa, satelliteMetrics,
       {dataSources && dataSources.length > 0 && (
         <p className="blended-source muted">Totals blended with {dataSources.join(' + ')}.</p>
       )}
+      <section className="valuation-section">
+        <h3>Carbon credit valuation</h3>
+        <p className="valuation-desc muted">
+          Uses total CO₂ equivalent and an assumed carbon price per tonne. Adjust the price to match local credit markets.
+        </p>
+        <div className="valuation-cards">
+          <div className="card">
+            <span className="card-label">Total CO₂eq</span>
+            <span className="card-value">{totalCo2Tonnes.toFixed(1)} tCO₂e</span>
+          </div>
+          <div className="card valuation-input-card">
+            <span className="card-label">Price per tCO₂e (USD)</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={pricePerTonne}
+              onChange={e => setPricePerTonne(Number(e.target.value) || 0)}
+              className="valuation-input"
+            />
+          </div>
+          <div className="card">
+            <span className="card-label">Estimated stand value</span>
+            <span className="card-value">${formatNum(standValue, 0)}</span>
+          </div>
+        </div>
+      </section>
       <section className="species-breakdown">
         <h3>Species breakdown</h3>
         <ul>

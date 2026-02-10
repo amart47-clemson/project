@@ -14,19 +14,34 @@ def _in_gedi_coverage(south: float, north: float) -> bool:
 
 
 def _try_earthaccess_login() -> bool:
-    """Try to authenticate with NASA Earthdata (netrc or env). Returns True if authenticated."""
+    """Try to authenticate with NASA Earthdata.
+
+    Order:
+    - First, try environment variables (EARTHDATA_USERNAME/EARTHDATA_PASSWORD) – best for deployed servers.
+    - Then, fall back to .netrc (good for local development).
+    Returns True if authenticated, False otherwise.
+    """
     try:
-        import earthaccess
-        auth = earthaccess.login(strategy="netrc")
-        if getattr(auth, "authenticated", False):
-            return True
-        # Optional: try env vars for server-side auth
+        import earthaccess  # type: ignore
         import os
-        u, p = os.environ.get("EARTHDATA_USERNAME"), os.environ.get("EARTHDATA_PASSWORD")
-        if u and p:
-            auth = earthaccess.login(strategy="environment")
-            return getattr(auth, "authenticated", False)
+    except Exception:
         return False
+
+    # 1) Env vars (preferred for deployed environments like Railway/Render)
+    u, p = os.environ.get("EARTHDATA_USERNAME"), os.environ.get("EARTHDATA_PASSWORD")
+    if u and p:
+        try:
+            auth = earthaccess.login(strategy="environment")
+            if getattr(auth, "authenticated", False):
+                return True
+        except Exception:
+            # Fall through to netrc
+            pass
+
+    # 2) .netrc (preferred for local development)
+    try:
+        auth = earthaccess.login(strategy="netrc")
+        return getattr(auth, "authenticated", False)
     except Exception:
         return False
 
